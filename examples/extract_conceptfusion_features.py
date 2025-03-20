@@ -41,7 +41,7 @@ class ProgramArgs:
         / "checkpoints"
         / "sam_vit_h_4b8939.pth"
     )
-    model_type = "vit_h"
+    model_type: str = "vit_h"
     # Ignore masks that have valid pixels less than this fraction (of the image area)
     bbox_area_thresh: float = 0.0005
     # Number of query points (grid size) to be sampled by SAM
