@@ -69,8 +69,6 @@ class ProgramArgs:
 
     # Directory to temporarily store embeddings to
     feat_dir: str = "saved-feat"
-    # This is a placeholder -- will be set by the script once the model is run
-    embedding_dim: int = 512  # dimensionality of embeddings
 
     # Odometry file (in format created by "realtime/compute_and_save_o3d_odom.py")
     odomfile: str = "data/azurekinect/poses.txt"
