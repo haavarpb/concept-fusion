@@ -34,9 +34,8 @@ class ProgramArgs:
     topk: int = 10000
 
     # CLIP model config
-    open_clip_model = "ViT-H-14"
-    open_clip_pretrained_dataset = "laion2b_s32b_b79k"
-
+    open_clip_model = "ViT-B-32"
+    open_clip_pretrained_dataset = "laion2b_s34b_b79k"
     def to_dict(self) -> dict:
         """Convert the ProgramArgs object to a dictionary"""
         attrs = {}
