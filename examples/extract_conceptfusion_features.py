@@ -146,7 +146,7 @@ def main():
         LOAD_IMG_HEIGHT, LOAD_IMG_WIDTH = img.shape[0], img.shape[1]
         
         global_feat = None
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast("cuda"):
             # print("Extracting global CLIP features...")
             _img = preprocess(Image.fromarray(img, mode="RGB")).unsqueeze(0)
             global_feat = model.encode_image(_img.cuda())
