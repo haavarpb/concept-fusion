@@ -112,7 +112,7 @@ def main():
         cur_mask = masks[0]["segmentation"]
         _savefile = os.path.join(
             args.save_dir,
-            os.path.splitext(os.path.basename(dataset.color_paths[idx]))[0] + ".pkl",
+            str(idx) + ".pkl"
         )
         with open(_savefile, "wb") as f:
             pkl.dump(masks, f, protocol=pkl.HIGHEST_PROTOCOL)
@@ -136,7 +136,7 @@ def main():
     for idx in trange(len(dataset)):
         maskfile = os.path.join(
             args.save_dir,
-            os.path.splitext(os.path.basename(dataset.color_paths[idx]))[0] + ".pkl",
+            str(idx) + ".pkl"
         )
         with open(maskfile, "rb") as f:
             masks = pkl.load(f)
