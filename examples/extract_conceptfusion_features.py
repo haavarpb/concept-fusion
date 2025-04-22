@@ -117,6 +117,11 @@ def main():
         with open(_savefile, "wb") as f:
             pkl.dump(masks, f, protocol=pkl.HIGHEST_PROTOCOL)
 
+    # Done with SAM, free GPU memory
+    del mask_generator
+    del sam
+    torch.cuda.empty_cache()
+
     print(
         f"Initializing OpenCLIP model: {args.open_clip_model}"
         f" pre-trained on {args.open_clip_pretrained_dataset}..."
