@@ -12,6 +12,7 @@ import open_clip
 import torch
 import tyro
 from gradslam.datasets import (
+    AzureKinectDataset,
     ICLDataset,
     ReplicaDataset,
     ScannetDataset,
