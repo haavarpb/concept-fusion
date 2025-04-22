@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
 
-import cv2
 import open_clip
 import torch
 import tyro
@@ -108,10 +107,8 @@ def main():
 
     print("Extracting SAM masks...")
     for idx in trange(len(dataset)):
-        imgfile = dataset.color_paths[idx]
-        img = cv2.imread(imgfile)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        masks = mask_generator.generate(img)
+        img, *_ = dataset[idx]
+        masks = mask_generator.generate(img.cpu().numpy())
         cur_mask = masks[0]["segmentation"]
         _savefile = os.path.join(
             args.save_dir,
@@ -139,15 +136,14 @@ def main():
         with open(maskfile, "rb") as f:
             masks = pkl.load(f)
         
-        imgfile = dataset.color_paths[idx]
-        img = cv2.imread(imgfile)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_torch, *_ = dataset[idx]
+        img = img_torch.cpu().numpy()
         LOAD_IMG_HEIGHT, LOAD_IMG_WIDTH = img.shape[0], img.shape[1]
         
         global_feat = None
         with torch.cuda.amp.autocast():
             # print("Extracting global CLIP features...")
-            _img = preprocess(Image.open(imgfile)).unsqueeze(0)
+            _img = preprocess(Image.fromarray(img, mode="RGB")).unsqueeze(0)
             global_feat = model.encode_image(_img.cuda())
             global_feat /= global_feat.norm(dim=-1, keepdim=True)
             # tqdm.write(f"Image feature dims: {global_feat.shape} \n")
@@ -165,7 +161,7 @@ def main():
             nonzero_inds = torch.argwhere(torch.from_numpy(masks[maskidx]["segmentation"]))
             # Note: Image is (H, W, 3). In SAM output, y coords are along height, x along width
             img_roi = img[_y : _y + _h, _x : _x + _w, :]
-            img_roi = Image.fromarray(img_roi)
+            img_roi = Image.fromarray(img_roi, mode="RGB")
             img_roi = preprocess(img_roi).unsqueeze(0).cuda()
             roifeat = model.encode_image(img_roi)
             roifeat = torch.nn.functional.normalize(roifeat, dim=-1)
