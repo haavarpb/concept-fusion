@@ -2,12 +2,9 @@ import os
 import pickle as pkl
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 import cv2
-import matplotlib.pyplot as plt
-import numpy as np
-import open3d as o3d
 import open_clip
 import torch
 import tyro
@@ -18,14 +15,9 @@ from gradslam.datasets import (
     ScannetDataset,
     load_dataset_config,
 )
-from gradslam.slam.pointfusion import PointFusion
-from gradslam.structures.pointclouds import Pointclouds
-from gradslam.structures.rgbdimages import RGBDImages
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
-from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
-from tqdm import tqdm, trange
-from typing_extensions import Literal
+from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
+from tqdm import trange
 
 
 @dataclass
@@ -43,13 +35,8 @@ class ProgramArgs:
         / "sam_vit_h_4b8939.pth"
     )
     model_type: str = "vit_h"
-    # Ignore masks that have valid pixels less than this fraction (of the image area)
-    bbox_area_thresh: float = 0.0005
     # Number of query points (grid size) to be sampled by SAM
     points_per_side: int = 32
-
-    # gradslam mode ("incremental" vs "batch")
-    mode: Literal["incremental", "batch"] = "incremental"
 
     # Path to the data config (.yaml) file
     dataconfig_path: str = "dataconfigs/icl.yaml"
