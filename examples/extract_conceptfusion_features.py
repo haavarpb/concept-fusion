@@ -192,33 +192,6 @@ def main():
         outfeat = torch.nn.functional.normalize(outfeat, dim=-1)
         outfeat = outfeat[0].half() # --> H, W, feat_dim
 
-        # tokenizer = open_clip.get_tokenizer(args.open_clip_model)
-        # while True:
-        #     # Prompt user whether or not to continue
-        #     prompt_text = input("Type a prompt ('q' to quit): ")
-        #     if prompt_text == "q":
-        #         break
-
-        #     text = tokenizer([prompt_text])
-        #     textfeat = model.encode_text(text.cuda())
-        #     textfeat = torch.nn.functional.normalize(textfeat, dim=-1)
-        #     textfeat = textfeat.unsqueeze(0)
-
-        #     fig, ax = plt.subplots(1, 2)
-        #     img_to_show = img
-        #     im0 = ax[0].imshow(img_to_show)
-        #     ax[0].axis("off")
-
-        #     _simfunc = torch.nn.CosineSimilarity(dim=-1)
-        #     _sim = _simfunc(outfeat.float().cuda(), textfeat)
-        #     _sim = (_sim - _sim.min()) / (_sim.max() - _sim.min() + 1e-12)
-        #     im1 = ax[1].matshow(_sim.detach().cpu().numpy())
-        #     ax[1].axis("off")
-        #     divider = make_axes_locatable(ax[1])
-        #     cax = divider.append_axes("right", size="5%", pad=0.05)
-
-        #     plt.show()
-
         savefile = os.path.join(
             args.save_dir,
             os.path.splitext(os.path.basename(dataset.color_paths[idx]))[0] + ".pt",
