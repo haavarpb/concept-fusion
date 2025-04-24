@@ -7,13 +7,7 @@ from typing import Union
 import open_clip
 import torch
 import tyro
-from gradslam.datasets import (
-    AzureKinectDataset,
-    ICLDataset,
-    ReplicaDataset,
-    ScannetDataset,
-    load_dataset_config,
-)
+from datasets import get_dataset
 from PIL import Image
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from tqdm import trange
@@ -61,29 +55,11 @@ class ProgramArgs:
     save_dir: str = "saved-feat"
 
 
-def get_dataset(dataconfig_path, basedir, sequence, **kwargs):
-    config_dict = load_dataset_config(dataconfig_path)
-    if config_dict["dataset_name"].lower() in ["icl"]:
-        return ICLDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["replica"]:
-        return ReplicaDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["azure", "azurekinect"]:
-        return AzureKinectDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["scannet"]:
-        return ScannetDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_source"].lower() in ["plugin"]:
-        from plugins import plugin_dataset
-        return plugin_dataset(config_dict, basedir, sequence, **kwargs)
-    else:
-        raise ValueError(f"Unknown dataset name {config_dict['dataset_name']}")
-
-
 def main():
-
     torch.autograd.set_grad_enabled(False)
 
     args = tyro.cli(ProgramArgs)
-    
+
     # dataconfig = load_dataset_config(args.dataconfig_path)
     dataset = get_dataset(
         dataconfig_path=args.dataconfig_path,
@@ -113,10 +89,7 @@ def main():
         img, *_ = dataset[idx]
         masks = mask_generator.generate(img.cpu().numpy())
         cur_mask = masks[0]["segmentation"]
-        _savefile = os.path.join(
-            args.save_dir,
-            str(idx) + ".pkl"
-        )
+        _savefile = os.path.join(args.save_dir, str(idx) + ".pkl")
         with open(_savefile, "wb") as f:
             pkl.dump(masks, f, protocol=pkl.HIGHEST_PROTOCOL)
 
@@ -137,17 +110,15 @@ def main():
 
     print("Computing pixel-aligned features...")
     for idx in trange(len(dataset)):
-        maskfile = os.path.join(
-            args.save_dir,
-            str(idx) + ".pkl"
-        )
+        maskfile = os.path.join(args.save_dir, str(idx) + ".pkl")
         with open(maskfile, "rb") as f:
             masks = pkl.load(f)
-        
+
         img_torch, *_ = dataset[idx]
         img = img_torch.cpu().numpy()
         LOAD_IMG_HEIGHT, LOAD_IMG_WIDTH = img.shape[0], img.shape[1]
-        
+
+        # Global feature stuff operating on image
         global_feat = None
         with torch.amp.autocast("cuda"):
             # print("Extracting global CLIP features...")
@@ -156,17 +127,22 @@ def main():
             global_feat /= global_feat.norm(dim=-1, keepdim=True)
             # tqdm.write(f"Image feature dims: {global_feat.shape} \n")
         global_feat = global_feat.half().cuda()
-        global_feat = torch.nn.functional.normalize(global_feat, dim=-1)  # --> (1, 1024)
+        global_feat = torch.nn.functional.normalize(
+            global_feat, dim=-1
+        )  # --> (1, 1024)
         feat_dim = global_feat.shape[-1]
         cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
 
+        # Local features operating on regions
         feat_per_roi = []
         roi_nonzero_inds = []
         similarity_scores = []
         for maskidx in range(len(masks)):
-            _x, _y, _w, _h = tuple(masks[maskidx]["bbox"])  # xywh bounding box
+            _x, _y, _w, _h = tuple(map(int, masks[maskidx]["bbox"]))  # xywh bounding box
             seg = masks[maskidx]["segmentation"]
-            nonzero_inds = torch.argwhere(torch.from_numpy(masks[maskidx]["segmentation"]))
+            nonzero_inds = torch.argwhere( # The region of interest, the mask without the zeros
+                torch.from_numpy(masks[maskidx]["segmentation"])
+            )
             # Note: Image is (H, W, 3). In SAM output, y coords are along height, x along width
             img_roi = img[_y : _y + _h, _x : _x + _w, :]
             img_roi = Image.fromarray(img_roi, mode="RGB")
@@ -177,31 +153,46 @@ def main():
             roi_nonzero_inds.append(nonzero_inds)
             _sim = cosine_similarity(global_feat, roifeat)
             similarity_scores.append(_sim)
-        
+
         similarity_scores = torch.cat(similarity_scores)
         softmax_scores = torch.nn.functional.softmax(similarity_scores, dim=0)
-        outfeat = torch.zeros(LOAD_IMG_HEIGHT, LOAD_IMG_WIDTH, feat_dim, dtype=torch.half)
+        outfeat = torch.zeros(
+            LOAD_IMG_HEIGHT, LOAD_IMG_WIDTH, feat_dim, dtype=torch.half
+        )
         for maskidx in range(len(masks)):
-            _weighted_feat = softmax_scores[maskidx] * global_feat + (1 - softmax_scores[maskidx]) * feat_per_roi[maskidx]
+            _weighted_feat = (
+                softmax_scores[maskidx] * global_feat
+                + (1 - softmax_scores[maskidx]) * feat_per_roi[maskidx]
+            )
             _weighted_feat = torch.nn.functional.normalize(_weighted_feat, dim=-1)
-            outfeat[roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]] += _weighted_feat[0].detach().cpu().half()
-            outfeat[roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]] = torch.nn.functional.normalize(
-                outfeat[roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]].float(), dim=-1
+            outfeat[
+                roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]
+            ] += _weighted_feat[0].detach().cpu().half()
+            outfeat[
+                roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]
+            ] = torch.nn.functional.normalize(
+                outfeat[
+                    roi_nonzero_inds[maskidx][:, 0], roi_nonzero_inds[maskidx][:, 1]
+                ].float(),
+                dim=-1,
             ).half()
 
-        outfeat = outfeat.unsqueeze(0).float()  # interpolate is not implemented for float yet in pytorch
+        outfeat = outfeat.unsqueeze(
+            0
+        ).float()  # interpolate is not implemented for float yet in pytorch
         outfeat = outfeat.permute(0, 3, 1, 2)  # 1, H, W, feat_dim -> 1, feat_dim, H, W
-        outfeat = torch.nn.functional.interpolate(outfeat, [args.desired_height, args.desired_width], mode="nearest")
+        outfeat = torch.nn.functional.interpolate(
+            outfeat, [args.desired_height, args.desired_width], mode="nearest"
+        )
         outfeat = outfeat.permute(0, 2, 3, 1)  # 1, feat_dim, H, W --> 1, H, W, feat_dim
         outfeat = torch.nn.functional.normalize(outfeat, dim=-1)
-        outfeat = outfeat[0].half() # --> H, W, feat_dim
+        outfeat = outfeat[0].half()  # --> H, W, feat_dim
 
         savefile = os.path.join(
             args.save_dir,
-            os.path.splitext(os.path.basename(dataset.color_paths[idx]))[0] + ".pt",
+            str(idx) + ".pt",
         )
         torch.save(outfeat.detach().cpu(), savefile)
-        
 
 
 if __name__ == "__main__":

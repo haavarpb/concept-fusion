@@ -12,12 +12,7 @@ from typing import List, Union
 import numpy as np
 import torch
 import tyro
-from gradslam.datasets import (
-    ICLDataset,
-    ReplicaDataset,
-    ScannetDataset,
-    load_dataset_config,
-)
+from datasets import get_dataset
 from gradslam.slam.pointfusion import PointFusion
 from gradslam.structures.pointclouds import Pointclouds
 from gradslam.structures.rgbdimages import RGBDImages
@@ -75,20 +70,6 @@ class ProgramArgs:
 
     # Directory to save pointclouds to
     dir_to_save_map: str = "saved-map"
-
-
-def get_dataset(dataconfig_path, basedir, sequence, **kwargs):
-    config_dict = load_dataset_config(dataconfig_path)
-    if config_dict["dataset_name"].lower() in ["icl"]:
-        return ICLDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["replica"]:
-        return ReplicaDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["azure", "azurekinect"]:
-        return AzureKinectDataset(config_dict, basedir, sequence, **kwargs)
-    elif config_dict["dataset_name"].lower() in ["scannet"]:
-        return ScannetDataset(config_dict, basedir, sequence, **kwargs)
-    else:
-        raise ValueError(f"Unknown dataset name {config_dict['dataset_name']}")
 
 
 def extract_and_save_features(args):
