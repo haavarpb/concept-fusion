@@ -4,7 +4,7 @@ Script to run feature fusion and save maps to disk.
 
 import os
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" # TODO: Why is this here. It is not even using tensorflow
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Union
@@ -83,7 +83,7 @@ def extract_and_save_features(args):
 
     # Get dataset
     dataset = get_dataset(
-        dataconfig=args.dataconfig_path,
+        dataconfig_path=args.dataconfig_path,
         basedir=args.dataset_path,
         sequence=args.sequence,
         desired_height=args.image_height,
@@ -118,6 +118,7 @@ def extract_and_save_features(args):
 
 
 def run_fusion_and_save_map(args):
+    torch.autograd.set_grad_enabled(False)
     # Get dataset
     dataset = get_dataset(
         dataconfig_path=args.dataconfig_path,
@@ -132,7 +133,7 @@ def run_fusion_and_save_map(args):
         odomfile=args.odomfile,
     )
 
-    slam = PointFusion(odom="gt", dsratio=1, device=args.device, use_embeddings=True)
+    slam = PointFusion(dsratio=1, device=args.device, use_embeddings=True)
 
     frame_cur, frame_prev = None, None
     pointclouds = Pointclouds(
@@ -141,19 +142,19 @@ def run_fusion_and_save_map(args):
 
     print("Running PointFusion (incremental mode)...")
 
+    _pose = torch.eye(4).unsqueeze(0).unsqueeze(0)
     for idx in trange(len(dataset)):
-        _color, _depth, intrinsics, _pose, *_ = dataset[idx]
-        _loadfile = os.path.join(
+        _color, _depth, intrinsics, *_ = dataset[idx] 
+        _loadfile = os.path.join( # Why do we load embeddings when we specify above that we want to compute them? See line 131
             args.feat_dir,
-            os.path.splitext(os.path.basename(dataset.color_paths[idx]))[0] + ".pt",
+            str(idx) + ".pt",
         )
-        _embedding = torch.load(_loadfile)
-        _embedding = _embedding.float()
+        _embedding = torch.load(_loadfile).half()
         _embedding = torch.nn.functional.interpolate(
             _embedding.permute(2, 0, 1).unsqueeze(0).float(),
             [args.image_height, args.image_width],
             mode="nearest",
-        )[0].permute(1, 2, 0).half().cuda()
+        )[0].permute(1, 2, 0)
         # _embedding = torch.nn.functional.interpolate(
         #     _embedding, [args.image_height, args.image_width], mode="nearest"
         # )
@@ -163,12 +164,20 @@ def run_fusion_and_save_map(args):
             _color.unsqueeze(0).unsqueeze(0),
             _depth.unsqueeze(0).unsqueeze(0),
             intrinsics.unsqueeze(0).unsqueeze(0),
-            _pose.unsqueeze(0).unsqueeze(0),
+            _pose.cpu(),
             embeddings=_embedding.unsqueeze(0).unsqueeze(0),
-        )
-        pointclouds, _ = slam.step(pointclouds, frame_cur, frame_prev)
-        # frame_prev = frame_cur
+        ).to("cuda")
+        pointclouds, new_poses = slam.step(pointclouds, frame_cur, frame_prev)
+        _pose = new_poses
+        frame_prev = frame_cur
         torch.cuda.empty_cache()
+        
+        #>>> rgbdimages = RGBDImages(colors, depths, intrinsics, poses)
+        #>>> slam = ICPSLAM(odom='gradicp')
+        #>>> pointclouds = Pointclouds()
+        #>>> pointclouds, new_poses = self.step(pointclouds, frames[:, 0], None)
+        #>>> frames.poses[:, :1] = new_poses
+        #>>> pointclouds, new_poses = self.step(pointclouds, frames[:, 1], frames[:, 0])
 
     os.makedirs(args.dir_to_save_map, exist_ok=True)
     pointclouds.save_to_h5(args.dir_to_save_map)
@@ -179,6 +188,6 @@ if __name__ == "__main__":
     args = tyro.cli(ProgramArgs)
 
     if args.mode == "extract":
-        extract_and_save_features(args)
+        extract_and_save_features(args) # TODO: What is this function call. They use different feature extractors. Is it the same method?
     elif args.mode == "fusion":
         run_fusion_and_save_map(args)
