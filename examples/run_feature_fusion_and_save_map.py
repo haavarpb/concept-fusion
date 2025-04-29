@@ -171,13 +171,6 @@ def run_fusion_and_save_map(args):
         _pose = new_poses
         frame_prev = frame_cur
         torch.cuda.empty_cache()
-        
-        #>>> rgbdimages = RGBDImages(colors, depths, intrinsics, poses)
-        #>>> slam = ICPSLAM(odom='gradicp')
-        #>>> pointclouds = Pointclouds()
-        #>>> pointclouds, new_poses = self.step(pointclouds, frames[:, 0], None)
-        #>>> frames.poses[:, :1] = new_poses
-        #>>> pointclouds, new_poses = self.step(pointclouds, frames[:, 1], frames[:, 0])
 
     os.makedirs(args.dir_to_save_map, exist_ok=True)
     pointclouds.save_to_h5(args.dir_to_save_map)
