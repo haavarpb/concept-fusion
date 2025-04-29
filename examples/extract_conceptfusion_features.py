@@ -88,10 +88,10 @@ def main():
     for idx in trange(len(dataset)):
         img, *_ = dataset[idx]
         masks = mask_generator.generate(img.cpu().numpy())
-        cur_mask = masks[0]["segmentation"]
+        valid_masks = list(filter(lambda mask: mask['bbox'][2]*mask['bbox'][3] != 0, masks))
         _savefile = os.path.join(args.save_dir, str(idx) + ".pkl")
         with open(_savefile, "wb") as f:
-            pkl.dump(masks, f, protocol=pkl.HIGHEST_PROTOCOL)
+            pkl.dump(valid_masks, f, protocol=pkl.HIGHEST_PROTOCOL)
 
     # Done with SAM, free GPU memory
     del mask_generator
