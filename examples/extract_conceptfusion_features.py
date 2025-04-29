@@ -89,7 +89,7 @@ def main():
         img, *_ = dataset[idx]
         masks = mask_generator.generate(img.cpu().numpy())
         valid_masks = list(filter(lambda mask: mask['bbox'][2]*mask['bbox'][3] != 0, masks))
-        _savefile = os.path.join(args.save_dir, str(idx) + ".pkl")
+        _savefile = os.path.join(args.save_dir, str(dataset.idx_2_svo_frame_num(idx)) + ".pkl")
         with open(_savefile, "wb") as f:
             pkl.dump(valid_masks, f, protocol=pkl.HIGHEST_PROTOCOL)
 
@@ -110,7 +110,7 @@ def main():
 
     print("Computing pixel-aligned features...")
     for idx in trange(len(dataset)):
-        maskfile = os.path.join(args.save_dir, str(idx) + ".pkl")
+        maskfile = os.path.join(args.save_dir, str(dataset.idx_2_svo_frame_num(idx)) + ".pkl")
         with open(maskfile, "rb") as f:
             masks = pkl.load(f)
 
